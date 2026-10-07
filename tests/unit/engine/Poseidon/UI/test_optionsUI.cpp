@@ -1,0 +1,277 @@
+#include <Poseidon/UI/Options/OptionsScrollList.hpp>
+#include <Poseidon/Foundation/Strings/Mbcs.hpp>
+#include <Poseidon/UI/Options/OptionsShell.hpp>
+#include <Poseidon/UI/OptionsUI.hpp>
+#include <Poseidon/UI/Controls/UIControlsBase.hpp>
+#include <Poseidon/UI/OptionsUICommon.hpp>
+#include <Poseidon/UI/UITestEngine.hpp>
+#include <catch2/catch_test_macros.hpp>
+
+#include <chrono>
+#include <cstdio>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <system_error>
+
+using namespace Poseidon;
+namespace fs = std::filesystem;
+
+namespace
+{
+struct TempOptionsDir
+{
+    fs::path root;
+
+    TempOptionsDir()
+    {
+        const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+        root = fs::temp_directory_path() / ("poseidon_options_" + std::to_string(nonce));
+        fs::create_directories(root);
+    }
+
+    ~TempOptionsDir()
+    {
+        std::error_code ec;
+        fs::permissions(root, fs::perms::owner_all, fs::perm_options::add, ec);
+        fs::remove_all(root, ec);
+    }
+};
+} // namespace
+
+TEST_CASE("optionsUI compiles", "[optionsUI][tier3]")
+{
+    REQUIRE(sizeof(AbstractOptionsUI) > 0);
+}
+
+class TestableOptionsShell : public OptionsShell
+{
+  public:
+    TestableOptionsShell(bool enableSimulation, bool credits) : OptionsShell(nullptr, enableSimulation, credits) {}
+};
+
+class TestableOptionsPage : public OptionsPage
+{
+  public:
+    using OptionsPage::ContainsCycleIdc;
+
+    const char* TitleText() const override { return ""; }
+    int DefaultFocusIdc() const override { return -1; }
+    const char* ResourceClassName() const override { return ""; }
+};
+
+class TestSemanticControl : public IControl
+{
+  public:
+    TestSemanticControl() : IControl(nullptr, 42) {}
+
+    int GetType() override { return 0; }
+    int GetStyle() override { return 0; }
+    bool IsInside(float, float) override { return false; }
+    void Move(float, float) override {}
+    void OnDraw(float) override {}
+};
+
+class TestHtmlContainer : public CHTMLContainer
+{
+  public:
+    void SelectSection(const char* name) { _currentSection = FindSection(name); }
+
+    float GetPageWidth() const override { return 1000; }
+    float GetPageHeight() const override { return 1000; }
+    float GetTextWidth(float, Font*, const char* text) const override { return std::strlen(text); }
+};
+
+TEST_CASE("OptionsShell propagates the simulation flag to the display base", "[optionsUI][UI]")
+{
+    TestableOptionsShell pausedShell(false, false);
+    CHECK(pausedShell.EnableSimulation() == false);
+    CHECK(pausedShell.SimulationEnabled() == false);
+
+    TestableOptionsShell runningShell(true, false);
+    CHECK(runningShell.EnableSimulation() == true);
+    CHECK(runningShell.SimulationEnabled() == true);
+}
+
+TEST_CASE("OptionsScrollList maps every slot-local control IDC back to its slot", "[optionsUI][UI]")
+{
+    for (int digit = 0; digit <= 9; ++digit)
+        CHECK(OptionsScrollList::SlotForControlIdc(540 + digit) == 4);
+
+    CHECK(OptionsScrollList::SlotForControlIdc(499) == -1);
+    CHECK(OptionsScrollList::SlotForControlIdc(590) == -1);
+    CHECK(OptionsScrollList::SlotForControlIdc(700) == -1);
+}
+
+TEST_CASE("OptionsScrollList row policy keeps disabled rows focusable but inert", "[optionsUI][UI]")
+{
+    CHECK(OptionsScrollList::CanRowReceiveFocus(OptionsScrollList::KindHeader) == false);
+    CHECK(OptionsScrollList::CanRowReceiveFocus(OptionsScrollList::KindAction) == true);
+    CHECK(OptionsScrollList::CanRowReceiveFocus(OptionsScrollList::KindSlider) == true);
+
+    CHECK(OptionsScrollList::CanRowAdjustValue(OptionsScrollList::KindStepper, false) == true);
+    CHECK(OptionsScrollList::CanRowAdjustValue(OptionsScrollList::KindBoolean, false) == true);
+    CHECK(OptionsScrollList::CanRowAdjustValue(OptionsScrollList::KindSlider, false) == true);
+    CHECK(OptionsScrollList::CanRowAdjustValue(OptionsScrollList::KindAction, false) == false);
+    CHECK(OptionsScrollList::CanRowAdjustValue(OptionsScrollList::KindBinding, false) == false);
+    CHECK(OptionsScrollList::CanRowAdjustValue(OptionsScrollList::KindStepper, true) == false);
+
+    CHECK(OptionsScrollList::CanRowInvokeAction(OptionsScrollList::KindAction, false) == true);
+    CHECK(OptionsScrollList::CanRowInvokeAction(OptionsScrollList::KindAction, true) == false);
+    CHECK(OptionsScrollList::CanRowOpenBinding(OptionsScrollList::KindBinding, false) == true);
+    CHECK(OptionsScrollList::CanRowOpenBinding(OptionsScrollList::KindBinding, true) == false);
+}
+
+TEST_CASE("UITestEngine returns semantic text when controls render a clipped marquee", "[optionsUI][UI]")
+{
+    TestSemanticControl ctrl;
+
+    UITestEngine::SetSemanticControlText(&ctrl, "Particles & Volumetrics");
+    CHECK(UITestEngine::GetControlText(&ctrl) == "Particles & Volumetrics");
+
+    UITestEngine::ClearSemanticControlText(&ctrl);
+    CHECK(UITestEngine::GetControlText(&ctrl).empty());
+}
+
+TEST_CASE("UITestEngine returns text from the current HTML section", "[ui][html]")
+{
+    TestHtmlContainer html;
+    html.LoadBuffer("inline.html", R"html(<html><body>
+        <h1><a name="End1"></a>Mission complete</h1>
+        <p>Selected result</p>
+        <hr>
+        <h1><a name="End2"></a>Hidden alternate result</h1>
+    </body></html>)html");
+
+    REQUIRE(html.NSections() == 2);
+    html.SelectSection("End1");
+    CHECK(UITestEngine::GetHtmlText(html) == "Mission complete Selected result");
+    html.SelectSection("End2");
+    CHECK(UITestEngine::GetHtmlText(html) == "Hidden alternate result");
+    html.SelectSection("Missing");
+    CHECK(UITestEngine::GetHtmlText(html).empty());
+}
+
+TEST_CASE("OptionsScrollList::FormatCell clips idle cells and marquees focused overflow", "[optionsUI][UI]")
+{
+    char buf[80];
+
+    // A value within the budget is passed through untouched, idle or focused.
+    OptionsScrollList::FormatCell("UP", OptionsScrollList::kBindingAltInnerChars, false, 0, buf, sizeof(buf));
+    CHECK(std::string(buf) == "UP");
+    OptionsScrollList::FormatCell("UP", OptionsScrollList::kBindingAltInnerChars, true, 0, buf, sizeof(buf));
+    CHECK(std::string(buf) == "UP");
+
+    // "Left Shift" (10) overflows the 6-char alt budget: clipped to the head
+    // when idle, and also at the start of the marquee cycle (offset 0).
+    OptionsScrollList::FormatCell("Left Shift", OptionsScrollList::kBindingAltInnerChars, false, 0, buf, sizeof(buf));
+    CHECK(std::string(buf) == "Left S");
+    OptionsScrollList::FormatCell("Left Shift", OptionsScrollList::kBindingAltInnerChars, true, 0, buf, sizeof(buf));
+    CHECK(std::string(buf) == "Left S");
+
+    // After the start pause plus a few scroll steps the focused window has
+    // advanced past the head, so it no longer reads "Left S".
+    const DWORD advanced = (DWORD)OptionsScrollList::kPauseMs + (DWORD)OptionsScrollList::kScrollPeriodMs * 4;
+    OptionsScrollList::FormatCell("Left Shift", OptionsScrollList::kBindingAltInnerChars, true, advanced, buf,
+                                  sizeof(buf));
+    CHECK(std::string(buf) != "Left S");
+
+    // An idle cell never advances no matter the elapsed time.
+    OptionsScrollList::FormatCell("Left Shift", OptionsScrollList::kBindingAltInnerChars, false, advanced, buf,
+                                  sizeof(buf));
+    CHECK(std::string(buf) == "Left S");
+
+    OptionsScrollList::FormatCell("Načíst vybrané mody", 8, true, advanced, buf, sizeof(buf));
+    CHECK(Foundation::CountUtf8Codepoints(buf) == 8);
+}
+
+TEST_CASE("OptionsPage cycle membership helper only accepts listed IDCs", "[optionsUI][UI]")
+{
+    const int cycle[] = {1101, 1104, 1107};
+    TestableOptionsPage page;
+
+    CHECK(page.ContainsCycleIdc(1101, cycle, 3));
+    CHECK(page.ContainsCycleIdc(1107, cycle, 3));
+    CHECK_FALSE(page.ContainsCycleIdc(1105, cycle, 3));
+    CHECK_FALSE(page.ContainsCycleIdc(-1, cycle, 3));
+    CHECK_FALSE(page.ContainsCycleIdc(1101, nullptr, 3));
+}
+
+// The Options screen is chosen from the DATA, not hardcoded, because loading a resource class
+// that the loaded data set does not define yields an EMPTY display instead of an error.
+//
+// This is not hypothetical: a stock ARMA: Cold War Assault install ships RscDisplayOptions and
+// RscDisplayOptionsVideo in bin/RESOURCE.BIN but NOT RscOptionsShell, which arrives separately in
+// bin/resource-extra.cpp. The shell was constructed unconditionally, so on that data the Options
+// entry opened a screen with no notebook, no buttons and no message — for years. Pin the probe so the selection cannot quietly become unconditional again.
+TEST_CASE("Options screen selection follows the resource the data set actually defines", "[optionsUI][UI]")
+{
+    ParamFile res;
+    CHECK(res.FindEntry("RscOptionsShell") == nullptr);
+
+    // Classic data: only the original family is present, so the probe must say "no shell".
+    res.AddClass("RscDisplayOptions");
+    CHECK(res.FindEntry("RscOptionsShell") == nullptr);
+    CHECK(res.FindEntry("RscDisplayOptions") != nullptr);
+
+    // Remaster data: resource-extra.cpp has been merged in and the shell is available.
+    res.AddClass("RscOptionsShell");
+    CHECK(res.FindEntry("RscOptionsShell") != nullptr);
+}
+
+TEST_CASE("Continue save selection creates a readable copy", "[optionsUI][savegame]")
+{
+    TempOptionsDir dir;
+    const fs::path save = dir.root / "save.fps";
+    const fs::path continueSave = dir.root / "continue.fps";
+    std::ofstream(save, std::ios::binary) << "saved-world";
+
+    const std::string saveDir = dir.root.string() + "/";
+    EnsureContinueSave(saveDir.c_str());
+
+    std::ifstream input(continueSave, std::ios::binary);
+    std::string payload;
+    input >> payload;
+    CHECK(payload == "saved-world");
+}
+
+TEST_CASE("User missions use profile save directories", "[optionsUI][savegame]")
+{
+    const bool userMission = IsUserMission();
+    const RString baseDirectory = GetBaseDirectory();
+    const RString baseSubdirectory = GetBaseSubdirectory();
+    const RString filenameReal = Glob.header.filenameReal;
+    const std::string worldName = Glob.header.worldname;
+
+    SetBaseDirectory(true, GetUserMissionsBase());
+    SetBaseSubdirectory("missions/");
+    Glob.header.filenameReal = "";
+
+    CHECK(GetSaveDirectory() == GetTmpSaveDirectory());
+
+    Glob.header.filenameReal = "editor_test";
+    std::snprintf(Glob.header.worldname, sizeof(Glob.header.worldname), "%s", "demo");
+    const RString namedSaveDirectory = GetUserDirectory() + RString("UserSaved/missions/editor_test.demo/");
+    CHECK(GetSaveDirectory() == namedSaveDirectory);
+
+#ifndef _WIN32
+    Glob.header.filenameReal = "legacy_test";
+    const RString legacySaveDirectory = GetUserDirectory() + RString("Saved/") + GetBaseDirectory() +
+                                        GetBaseSubdirectory() + RString("legacy_test.demo/");
+    fs::create_directories(fs::path(static_cast<const char*>(legacySaveDirectory)));
+    std::ofstream(fs::path(static_cast<const char*>(legacySaveDirectory)) / "save.fps", std::ios::binary)
+        << "saved-world";
+
+    const RString migratedSaveDirectory = GetSaveDirectory();
+    std::ifstream migrated(fs::path(static_cast<const char*>(migratedSaveDirectory)) / "save.fps", std::ios::binary);
+    std::string payload;
+    migrated >> payload;
+    CHECK(payload == "saved-world");
+    CHECK(fs::exists(fs::path(static_cast<const char*>(legacySaveDirectory)) / "save.fps"));
+#endif
+
+    SetBaseDirectory(userMission, baseDirectory);
+    SetBaseSubdirectory(baseSubdirectory);
+    Glob.header.filenameReal = filenameReal;
+    std::snprintf(Glob.header.worldname, sizeof(Glob.header.worldname), "%s", worldName.c_str());
+}

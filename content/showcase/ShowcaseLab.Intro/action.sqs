@@ -1,0 +1,139 @@
+_id = _this select 2
+; Action IDs belong to their owner, not to the mission globally.
+? (_this select 0) == labHeli : goto "heliaction"
+? (_this select 0) == labRideJeep : goto "jeepaction"
+? _id == labReset : goto "reset"
+? _id == labCastle : goto "castle"
+? _id == labRoom : goto "room"
+? _id == labRoomLight : goto "roomlight"
+? _id == labGlassVisit : goto "glass"
+? _id == labRideVisit : goto "jeepride"
+? _id == labRideStart : goto "jeepstart"
+? _id == labFlightVisit : goto "heliboard"
+? _id == labFlightStart : goto "helistart"
+? _id == labFlightLand : goto "heliland"
+? _id == labCrater : goto "crater"
+? _id == labCraterReset : goto "craterreset"
+? _id == labThrow : goto "throw"
+? _id == labDrop : goto "drop"
+? _id == labBall : goto "ball"
+? _id == labBox : goto "box"
+? _id == labLight : goto "light"
+? _id == labCool : goto "cool"
+? _id == labClear : goto "clear"
+? _id == labDay : goto "day"
+hint "PHYSICS: shoot the stacks, push the dominoes, or select and throw bodies. Reset rebuilds 42 bodies.\n\nGALLERY: left FLAT, middle ribbed NORMAL, right GLOSS. Same flat geometry and albedo. Enter light mode and throw/place up to four moving lamps. Toggle night for stronger contrast.\n\nVEHICLES: Jeep, Ural, UH60. Weather tab: clouds, wind and experimental snow. Physics tab: body mass, shape, friction and light colour/intensity.\n\nSingle player only. Probe bodies are not saved."
+exit
+#reset
+hint (triPhysicsShowcase "reset")
+exit
+#heliaction
+? _id == labHeliFlightStart : goto "helistart"
+? _id == labHeliFlightLand : goto "heliland"
+exit
+#jeepaction
+? _id == labJeepRideStart : goto "jeepstart"
+exit
+#castle
+hint (triPhysicsShowcase "castle")
+player setPos [9500,3530,0]
+player setDir 0
+hint "BLOCK CASTLE\n32 m wide, 8 m walls and 11 m towers. Lightweight individual blocks. Shoot the walls or throw heavy bodies. Reset restores the small test field."
+exit
+#room
+player setPos [9547,3494,0]
+player setDir 0
+hint "ROTATING LIGHT ROOM\nEnter through the central doorway. The warm point light moves continuously around the room. NORMAL and GLOSS panels are on the back wall. LAB: toggle room light gives a direct off/on comparison."
+exit
+#roomlight
+hint (triPhysicsShowcase "roomlight")
+exit
+#glass
+player setPos [9575,3499,0]
+player setDir 0
+hint "GLASS\nA thin tinted pane in a solid frame. The NORMAL panel behind it must remain visible. Walk to the side to compare its reflection and tint.\nShoot the pane to break it and open the passage. This is separate from the opaque GLOSS material demo."
+exit
+#crater
+hint (triPhysicsShowcase "crater")
+player setPos [9700,3430,0]
+player setDir 0
+hint "EXPERIMENTAL TERRAIN\nCrater ahead at 9700 / 3600. Real heightfield and collision change; coarse source-grid resolution. Walk in or drop a physics body. Restore with LAB: restore crater terrain.\nNot saved, not networked, no tunnels. One rebuild can briefly pause."
+exit
+#jeepride
+? vehicle player != player : goto "ridegetout"
+player setPos [9802,3300,0]
+player setDir 270
+? !("M16" in weapons player) : player addWeapon "M16"
+player addMagazine "M16"
+player addMagazine "M16"
+player selectWeapon "M16"
+player assignAsCargo labRideJeep
+hint "JEEP CIRCUIT\nBoard as passenger, then choose Ready personal weapon / Waffe im Fahrzeug bereitmachen. When ready, choose LAB: start / stop Jeep circuit.\n37 unarmed targets, repeated slow laps. Targets are on your RIGHT. Mouse: look/aim freely. Left click: fire. R: reload. WARNING: your bullets can hit your own vehicle and crew."
+exit
+#jeepstart
+? !(player in labRideJeep) : goto "jeepnotaboard"
+labRideRequested = !labRideRequested
+hint "Jeep circuit toggled. Use the same LAB action to pause or resume. Ready your personal weapon before firing."
+exit
+#jeepnotaboard
+hint "Board the range Jeep as passenger first."
+exit
+#ridegetout
+hint "Leave your current vehicle before visiting the Jeep firing range."
+exit
+#heliboard
+? vehicle player != player : goto "ridegetout"
+? !(alive labHeli) : exit
+? ((getPos labHeli) select 2) > 1.5 : goto "heliairborne"
+player assignAsCargo labHeli
+player moveInCargo labHeli
+hint "HELICOPTER RIFLE CIRCUIT\nYou are a passenger with your personal rifle, not the FFAR gunner. Choose Ready personal weapon, then LAB: start helicopter circuit. Mouse: look/aim freely. The range is by the RIGHT door. WARNING: your bullets can hit your own vehicle and crew. LAB: return and land helicopter ends the flight."
+exit
+#helistart
+? !(player in labHeli) : goto "helinotaboard"
+labFlightRequested = true
+hint "Pilot starting repeated circuits. Aim through the right door toward the range. Request return and landing before leaving the helicopter."
+exit
+#heliland
+labFlightRequested = false
+hint "Pilot returning to the campus to land."
+exit
+#helinotaboard
+hint "Use LAB: board helicopter rifle seat first."
+exit
+#heliairborne
+hint "The helicopter is airborne. Request return and landing first."
+exit
+#craterreset
+hint (triPhysicsShowcase "craterreset")
+exit
+#throw
+hint (triPhysicsShowcase "throw")
+exit
+#drop
+hint (triPhysicsShowcase "drop")
+exit
+#ball
+hint (triPhysicsShowcase "ball")
+exit
+#box
+hint (triPhysicsShowcase "box")
+exit
+#light
+hint (triPhysicsShowcase "light")
+exit
+#cool
+hint (triPhysicsShowcase "cool")
+exit
+#clear
+hint (triPhysicsShowcase "clear")
+exit
+#day
+? labNight : goto "sun"
+skipTime (22 - daytime)
+labNight = true
+exit
+#sun
+skipTime (17 - daytime)
+labNight = false
+exit

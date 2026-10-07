@@ -1,0 +1,26 @@
+~0.5
+ffvPassenger setDir 270
+ffvDriver assignAsDriver ffvJeep
+ffvDriver moveInDriver ffvJeep
+doStop ffvDriver
+ffvPassenger assignAsCargo ffvJeep
+ffvShots=0
+ffvPassenger addEventHandler ["Fired",{ffvShots=ffvShots+1}]
+hint "Board as passenger, then use Ready personal weapon (Waffe im Fahrzeug bereitmachen) in the action menu. Targets on the RIGHT are unarmed. Left mouse: fire. R: reload."
+#wait
+~0.25
+? !(ffvPassenger in ffvJeep): goto "wait"
+ffvJeep setFuel 1
+ffvDriver doMove [9700,3840,0]
+#ride
+~0.25
+? !(ffvPassenger in ffvJeep): goto "stop"
+? ((getPos ffvJeep) select 1) > 3828: goto "finish"
+goto "ride"
+#stop
+doStop ffvDriver
+goto "wait"
+#finish
+doStop ffvDriver
+hint "End of firing lane. You can get out and board again."
+exit

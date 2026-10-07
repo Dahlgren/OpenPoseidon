@@ -1,0 +1,9 @@
+~0.5
+ffvPassenger assignAsCargo ffvJeep
+ffvPassenger moveInCargo ffvJeep
+ffvPassenger selectWeapon "M16"
+ffvShots=0
+ffvPassenger addEventHandler ["Fired",{ffvShots=ffvShots+1}]
+~2
+hint "Jeep: use the action menu to Ready personal weapon (Waffe im Fahrzeug bereitmachen). Aim RIGHT, left mouse fires, R reloads. Stow personal weapon returns to the normal seat."
+exit

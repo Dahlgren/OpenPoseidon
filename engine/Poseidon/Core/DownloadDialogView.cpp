@@ -1,0 +1,78 @@
+#include <Poseidon/Core/DownloadDialogView.hpp>
+
+#include <Poseidon/Core/DownloadProgress.hpp>
+
+#include <algorithm>
+#include <cstdio>
+
+namespace Poseidon
+{
+namespace
+{
+std::string PercentText(float fraction01)
+{
+    const float f = std::clamp(fraction01, 0.0f, 1.0f);
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%d%%", static_cast<int>(f * 100.0f + 0.5f));
+    return buf;
+}
+
+} // namespace
+
+std::string FormatAnimatedActivity(const char* label, uint64_t elapsedMs)
+{
+    std::string text = label != nullptr ? label : "";
+    text.append(1 + (elapsedMs / 400) % 3, '.');
+    return text;
+}
+
+DownloadDialogView BuildDownloadDialogView(const DownloadSnapshot& snapshot, const DownloadDialogLabels& labels)
+{
+    DownloadDialogView view;
+    view.currentFraction = snapshot.currentFraction;
+    view.overallFraction = snapshot.overallFraction;
+
+    if (!snapshot.currentLabel.empty())
+        view.currentLine = snapshot.currentLabel + "   " + PercentText(snapshot.currentFraction);
+
+    if (snapshot.itemCount == 1)
+    {
+        // A single file (the MP mission case) — no "1 / 1", just the percent.
+        view.overallLine = PercentText(snapshot.overallFraction);
+    }
+    else if (snapshot.itemCount > 1)
+    {
+        // Completed items: when done, all N; otherwise the in-flight item's 1-based index.
+        int doneCount =
+            snapshot.done ? snapshot.itemCount : std::clamp(snapshot.currentIndex + 1, 0, snapshot.itemCount);
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%d / %d   %s", doneCount, snapshot.itemCount,
+                 PercentText(snapshot.overallFraction).c_str());
+        view.overallLine = buf;
+    }
+
+    if (snapshot.failed)
+    {
+        view.statusLine = snapshot.failureKind == DownloadFailureKind::Install ? labels.installFailed : labels.failed;
+    }
+    else if (snapshot.done)
+    {
+        view.statusLine = labels.complete;
+    }
+    else if (snapshot.cancelled)
+    {
+        view.statusLine = labels.cancelled;
+    }
+    else if (snapshot.itemCount > 0)
+    {
+        if (snapshot.speedBytesPerSec > 0.0)
+            view.statusLine = DownloadProgress::FormatSpeed(snapshot.speedBytesPerSec) + "   " + labels.eta + " " +
+                              DownloadProgress::FormatEta(snapshot.etaSeconds);
+        else
+            view.statusLine = labels.starting;
+    }
+
+    return view;
+}
+
+} // namespace Poseidon

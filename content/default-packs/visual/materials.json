@@ -1,0 +1,54 @@
+{
+  "sourceVersion": 1,
+  "materials": {
+    "road_asphalt": {
+      "seed": 74125,
+      "tileMetres": [9.1, 6.25],
+      "aggregateMetres": 0.025,
+      "heightMetres": 0.002,
+      "baseSrgb": [92, 89, 83],
+      "roughness": 0.92,
+      "road": true
+    },
+    "gravel": {
+      "seed": 92032,
+      "tileMetres": [3.5, 6.25],
+      "aggregateMetres": 0.065,
+      "heightMetres": 0.014,
+      "baseSrgb": [125, 115, 99],
+      "roughness": 0.95,
+      "road": true,
+      "wheelTracks": [0.27, 0.73],
+      "trackOnly": true
+    },
+    "sand": {
+      "seed": 84217,
+      "tileMetres": [50.0, 50.0],
+      "aggregateMetres": 0.12,
+      "heightMetres": 0.02,
+      "rippleMetres": 0.55,
+      "rippleHeightMetres": 0.008,
+      "baseSrgb": [195, 180, 145],
+      "roughness": 0.97,
+      "road": false
+    },
+    "sand_detail": {
+      "seed": 92111,
+      "tileMetres": [0.5, 0.5],
+      "aggregateMetres": 0.002,
+      "heightMetres": 0.0005,
+      "baseSrgb": [195, 180, 145],
+      "roughness": 0.97,
+      "road": false
+    },
+    "soil": {
+      "seed": 33251,
+      "tileMetres": [4.0, 4.0],
+      "aggregateMetres": 0.045,
+      "heightMetres": 0.008,
+      "baseSrgb": [115, 94, 70],
+      "roughness": 0.97,
+      "road": false
+    }
+  }
+}

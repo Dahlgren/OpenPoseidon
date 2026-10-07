@@ -1,0 +1,9 @@
+; A fixed offshore camera shows the storm swells without a boat or follow motion.
+showCinemaBorder false
+0 setRain 0
+opMenuCamera = "camera" camCreate [2510,3518,9]
+opMenuCamera cameraEffect ["internal","back"]
+opMenuCamera camSetTarget [2250,3050,0]
+opMenuCamera camSetFOV 0.62
+opMenuCamera camSetPos [2510,3518,9]
+opMenuCamera camCommit 0
