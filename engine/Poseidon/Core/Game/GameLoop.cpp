@@ -122,7 +122,7 @@ static void PaceToFps(int targetFps, Foundation::unsigned64 frameStartUs)
         {
             gLastPace.sleepReqUs = static_cast<int64_t>(sleepMillis) * 1000;
             const Foundation::unsigned64 t0 = Poseidon::Foundation::getSystemTime();
-            ::Sleep(static_cast<DWORD>(sleepMillis));
+            Sleep(static_cast<DWORD>(sleepMillis));
             gLastPace.sleepActUs = static_cast<int64_t>(Poseidon::Foundation::getSystemTime() - t0);
         }
         return;

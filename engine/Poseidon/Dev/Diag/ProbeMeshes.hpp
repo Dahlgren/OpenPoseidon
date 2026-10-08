@@ -11,7 +11,7 @@
 // orientation is three column vectors and scaling them scales the model. So one
 // box mesh serves every box, whatever its dimensions.
 
-class LODShapeWithShadow;
+namespace Poseidon { class LODShapeWithShadow; }
 
 namespace Poseidon::Dev
 {

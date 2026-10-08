@@ -258,7 +258,14 @@ add_subdirectory(apps/tools/Tools)
 add_subdirectory(apps/tools/TcPbo)
 add_subdirectory(apps/tools/TcLister)
 add_subdirectory(apps/tools/Studio)
-add_subdirectory(tests/unit/apps/Studio)
+# The Studio UI suite needs the separately licensed Dear ImGui Test Engine (imgui's
+# vcpkg "test-engine" feature), which vcpkg.json no longer pulls in by default.
+find_path(IMGUI_TEST_ENGINE_INCLUDE_DIR imgui_te_engine.h)
+if(IMGUI_TEST_ENGINE_INCLUDE_DIR)
+    add_subdirectory(tests/unit/apps/Studio)
+else()
+    message(STATUS "Dear ImGui Test Engine not found; skipping PoseidonStudioTests")
+endif()
 add_subdirectory(apps/tetris/Tetris)
 add_subdirectory(tests/unit/apps/Tetris)
 

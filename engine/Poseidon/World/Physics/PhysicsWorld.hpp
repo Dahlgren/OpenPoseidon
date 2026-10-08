@@ -14,7 +14,7 @@
 // the simulation, and no existing collision or ray-cast path is replaced. See
 // PHY-001 §1.3 for why the line sits here and what crossing it would cost.
 
-class LODShape;
+namespace Poseidon { class LODShape; }
 
 namespace Poseidon::Physics
 {

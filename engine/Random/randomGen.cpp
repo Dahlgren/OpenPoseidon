@@ -1,6 +1,10 @@
 #include <cstdio>
 #include <cstdlib>
+#if defined(_MSC_VER)
 #include <intrin.h> // _ReturnAddress, for the POSEIDON_RNG_TRACE diagnostic
+#else
+#define _ReturnAddress() __builtin_return_address(0)
+#endif
 #include <Random/randomGen.hpp>
 #include <Poseidon/Foundation/Framework/AppFrame.hpp>
 

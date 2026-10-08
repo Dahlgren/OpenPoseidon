@@ -624,6 +624,10 @@ class EngineWgpu : public EngineDummy
     float EffectiveAutoExposureTau() const;
 
     SDL_Window* _window = nullptr;
+    // macOS only: the CAMetalLayer-backed view the wgpu surface renders into.
+    void* _metalView = nullptr; // SDL_MetalView
+    // Releases _metalView (if any) and then _window.
+    void DestroyGameWindow();
     WgrRenderer* _renderer = nullptr;
     // Registers renderer-owned dynamic VRAM alongside the engine's existing RAM
     // caches, so every compatibility layer uses one budget/debug surface.

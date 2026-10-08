@@ -10,7 +10,7 @@
 // Jolt as the fallback and lists three points at which that choice is revisited.
 // Everything the engine sees is above this line and does not change with it.
 
-class LODShape;
+namespace Poseidon { class LODShape; }
 
 namespace Poseidon::Physics
 {

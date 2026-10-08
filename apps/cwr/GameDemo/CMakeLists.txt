@@ -51,7 +51,7 @@ if(WIN32)
     )
 elseif(APPLE)
     target_link_libraries(PoseidonGameDemo PRIVATE
-        GameBase PoseidonGL33 Poseidon PoseidonOpenAL
+        GameBase PoseidonGL33 ${WGPU_LIB} Poseidon PoseidonOpenAL
         pthread dl
     )
 else()

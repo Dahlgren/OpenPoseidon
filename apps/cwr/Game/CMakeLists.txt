@@ -67,6 +67,7 @@ elseif(APPLE)
     target_link_libraries(PoseidonGame PRIVATE
         GameBase
         PoseidonGL33
+        ${WGPU_LIB}
         Poseidon
         PoseidonOpenAL
         pthread

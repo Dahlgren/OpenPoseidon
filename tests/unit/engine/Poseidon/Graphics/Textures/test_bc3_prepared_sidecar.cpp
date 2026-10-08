@@ -190,7 +190,7 @@ TEST_CASE("Prepared composite sidecar preserves original pixels metadata and exa
     CHECK(Pixels(source, mips[1], 1) == beforeLower);
     CHECK(Pixels(source, mips[2], 2) == beforeLast);
     CHECK(mips[0]._w == beforeHeader._w); CHECK(mips[0]._h == beforeHeader._h);
-    CHECK(mips[0]._sFormat == beforeHeader._sFormat);
+    CHECK(static_cast<Poseidon::PacFormat>(mips[0]._sFormat) == static_cast<Poseidon::PacFormat>(beforeHeader._sFormat));
     CHECK(source.GetAverageColor() == beforeAverage); CHECK(source.IsAlpha() == beforeAlpha);
     CHECK(source.IsTransparent() == beforeTransparent); CHECK(source.GetFormat() == beforeFormat);
     CHECK(source.GetMipmapCount() == beforeMips);

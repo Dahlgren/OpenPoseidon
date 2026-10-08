@@ -786,14 +786,28 @@ void WgrLogThunk(int32_t level, const char* msg, void* /*user*/)
     }
 }
 
-void DescribeSurface(SDL_Window* window, WgrSurfaceDesc& desc)
+// metalView receives the SDL Metal view created on macOS (null elsewhere); the caller owns it
+// and must release it with SDL_Metal_DestroyView before destroying the window.
+void DescribeSurface(SDL_Window* window, WgrSurfaceDesc& desc, void*& metalView)
 {
     const SDL_PropertiesID props = SDL_GetWindowProperties(window);
     desc.window = nullptr;
     desc.display = nullptr;
+    metalView = nullptr;
 #ifdef _WIN32
     desc.platform = WGR_PLATFORM_WIN32;
     desc.window = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+#elif defined(__APPLE__)
+    // Cocoa: hand wgpu an NSView whose backing layer is a CAMetalLayer. SDL's Metal view
+    // tracks the window's size and backing scale, so the drawable matches the pixel size.
+    (void)props;
+    desc.platform = WGR_PLATFORM_METAL;
+    metalView = SDL_Metal_CreateView(window);
+    if (!metalView)
+    {
+        LOG_ERROR(Graphics, "Wgpu: SDL_Metal_CreateView failed: {}", SDL_GetError());
+    }
+    desc.window = metalView;
 #else
     const char* driver = SDL_GetCurrentVideoDriver();
     if (driver && std::strcmp(driver, "wayland") == 0)
@@ -1627,7 +1641,7 @@ EngineWgpu::EngineWgpu(const GraphicsEngineParams& params) : _windowed(params.us
     _windowed = win.windowed;
 
     WgrSurfaceDesc desc{};
-    DescribeSurface(_window, desc);
+    DescribeSurface(_window, desc, _metalView);
     desc.width = U32(_w > 0 ? _w : 1);
     desc.height = U32(_h > 0 ? _h : 1);
 
@@ -1710,8 +1724,7 @@ EngineWgpu::EngineWgpu(const GraphicsEngineParams& params) : _windowed(params.us
                   "refusing renderer startup. The engine binary and wgpu_renderer.dll must come "
                   "from the SAME build — deploy both, not one.",
                   WGR_ABI_VERSION, WgrLayoutHash(), runtimeAbi, rendererLayout, wgr_build_id());
-        SDL_DestroyWindow(_window);
-        _window = nullptr;
+        DestroyGameWindow();
         return;
     }
 
@@ -1719,8 +1732,7 @@ EngineWgpu::EngineWgpu(const GraphicsEngineParams& params) : _windowed(params.us
     if (!_renderer)
     {
         LOG_ERROR(Graphics, "Wgpu: wgr_create failed; backend unavailable");
-        SDL_DestroyWindow(_window);
-        _window = nullptr;
+        DestroyGameWindow();
         return;
     }
 
@@ -2409,9 +2421,20 @@ EngineWgpu::~EngineWgpu()
     }
     if (_window)
     {
-        SDL_DestroyWindow(_window);
-        _window = nullptr;
+        DestroyGameWindow();
     }
+}
+
+void EngineWgpu::DestroyGameWindow()
+{
+    // The Metal view is a subview of the window, so it goes first.
+    if (_metalView)
+    {
+        SDL_Metal_DestroyView(_metalView);
+        _metalView = nullptr;
+    }
+    SDL_DestroyWindow(_window);
+    _window = nullptr;
 }
 
 AbstractTextBank* EngineWgpu::TextBank()
