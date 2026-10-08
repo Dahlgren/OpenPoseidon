@@ -115,7 +115,8 @@ enum WgrPlatform : int32_t
 {
     WGR_PLATFORM_WIN32 = 0,   // window = HWND,         display unused
     WGR_PLATFORM_XLIB = 1,    // window = Window (XID), display = Display*
-    WGR_PLATFORM_WAYLAND = 2  // window = wl_surface*,  display = wl_display*
+    WGR_PLATFORM_WAYLAND = 2, // window = wl_surface*,  display = wl_display*
+    WGR_PLATFORM_METAL = 3    // window = NSView* backed by a CAMetalLayer, display unused
 };
 
 enum WgrLogLevel : int32_t

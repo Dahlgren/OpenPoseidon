@@ -55,6 +55,9 @@ fn main() {
         println!("cargo:rerun-if-changed={}", packed.display());
     }
     println!("cargo:rerun-if-env-changed=PROFILE");
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        println!("cargo:rustc-cdylib-link-arg=-Wl,-install_name,@rpath/libwgpu_renderer.dylib");
+    }
     // Test-only override used to produce a compatible-import ABI mismatch DLL.
     // It is never set by CMake or a normal Cargo invocation.
     println!("cargo:rerun-if-env-changed=WGR_TEST_ABI_VERSION");

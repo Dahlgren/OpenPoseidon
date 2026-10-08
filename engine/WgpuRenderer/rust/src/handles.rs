@@ -1,6 +1,9 @@
 use raw_window_handle::{
-    RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle,
-    Win32WindowHandle, WindowsDisplayHandle, XlibDisplayHandle, XlibWindowHandle,
+    AppKitDisplayHandle, AppKitWindowHandle,
+    RawDisplayHandle, RawWindowHandle,
+    WaylandDisplayHandle, WaylandWindowHandle,
+    Win32WindowHandle, WindowsDisplayHandle,
+    XlibDisplayHandle, XlibWindowHandle,
 };
 
 use crate::ffi::{WgrPlatform, WgrSurfaceDesc};
@@ -45,6 +48,14 @@ pub fn build_handles(desc: &WgrSurfaceDesc) -> Result<(RawDisplayHandle, RawWind
             Ok((
                 RawDisplayHandle::Wayland(WaylandDisplayHandle::new(display)),
                 RawWindowHandle::Wayland(WaylandWindowHandle::new(surface)),
+            ))
+        }
+        WgrPlatform::Metal => {
+            let view = std::ptr::NonNull::new(desc.window)
+                .ok_or_else(|| "metal: null NSView".to_string())?;
+            Ok((
+                RawDisplayHandle::AppKit(AppKitDisplayHandle::new()),
+                RawWindowHandle::AppKit(AppKitWindowHandle::new(view)),
             ))
         }
     }

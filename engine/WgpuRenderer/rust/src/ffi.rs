@@ -37,6 +37,7 @@ pub enum WgrPlatform {
     Win32 = 0,
     Xlib = 1,
     Wayland = 2,
+    Metal = 3,
 }
 
 #[repr(C)]

@@ -666,6 +666,8 @@ const RESIDENCY_BUDGET_FALLBACK_MB: u64 = 2048;
 /// (`dlss_device.rs`), so this is the same escape hatch, used read-only.
 fn probe_device_local_bytes(adapter: &wgpu::Adapter) -> Result<u64, &'static str> {
     match adapter.get_info().backend {
+        // wgpu-hal only builds its Vulkan backend off Apple platforms (no MoltenVK feature).
+        #[cfg(not(target_vendor = "apple"))]
         wgpu::Backend::Vulkan => {
             // SAFETY: read-only. We take no ownership of the physical device or instance, do
             // not call anything that mutates them, and the returned borrow ends here.
@@ -719,7 +721,7 @@ fn probe_device_local_bytes(adapter: &wgpu::Adapter) -> Result<u64, &'static str
                 _ => Err("DXGI QueryVideoMemoryInfo returned no local budget"),
             }
         }
-        // GL/Metal/Noop and (on non-Windows) DX12 have no portable heap query here.
+        // GL/Metal/Noop, (on Apple) Vulkan and (on non-Windows) DX12 have no portable heap query here.
         _ => Err("backend exposes no device-memory query"),
     }
 }
