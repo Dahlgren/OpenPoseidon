@@ -34,25 +34,38 @@ existing `PoseidonTests` target includes the updated test source.
 
 ## Findings in the imported implementation
 
-These findings remain present in the source feature and this faithful port.
+All three findings below are fixed on this branch.
 
-- **High: saving can lose the previous database.** `DatabaseSave` removes the
+- **Fixed — High: saving could lose the previous database.** `DatabaseSave` removed the
   destination before renaming the temporary file. A crash between those
   operations, or a failed rename, leaves no previous database. The failure path
   also deletes the temporary file and overwrites the original error code during
-  cleanup. Use an operating-system replacement operation that preserves the
-  previous file if replacement fails, and retain the original failure code.
-- **Medium: released databases retain memory.** `ReleaseDatabaseRef` decrements
-  the reference count without clearing the root; `NewDatabaseHandle` always
-  appends another entry. Repeated creation or loading retains all database
-  contents until process exit. Reclaim contents when the last reference is
-  released and use a lifetime-safe strategy for recycling entry slots.
-- **Medium: list indices are converted before validation.** List get/set/remove
-  cast script floats to `int`; pop casts to `size_t`. Non-finite or out-of-range
-  values can cause undefined floating-to-integer conversions. Negative fractional
-  indices can truncate to zero in get/set/remove. Check finiteness, integrality
-  and range before conversion, with regression coverage for each operation.
+  cleanup. It now uses `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING` on Windows
+  and rename on POSIX, without deleting the destination first. Cleanup uses a
+  separate error code. Regression tests cover a destination directory remaining
+  intact and, on Windows, a blocked replacement preserving the old data followed
+  by a successful retry. The existing test covers successful initial saves and
+  overwrites. Power-loss durability is not guaranteed.
+- **Fixed — Medium: released databases retained memory.** `ReleaseDatabaseRef`
+  now resets the root when the last reference is released, freeing nested
+  values and container capacity. An intrusive free list reuses empty slots
+  without allocating during release. Copies and clones retain references, so
+  their slots cannot be reused while they are live. Slot-table capacity remains
+  available for peak simultaneous usage. Tests cover copies, clones,
+  self-assignment, replacement assignment, empty reused slots, preservation of
+  other live databases and repeated creation/loading. Both new handle-lifetime
+  tests failed against the previous implementation and passed with the fix.
+- **Fixed — Medium: list indices were converted before validation.** All four
+  indexed list operations now share a validator that checks scalar type,
+  finiteness, integrality and bounds before converting to `size_t`. Invalid
+  indices preserve the list and return the existing fallback/failure result.
+  Regression coverage includes negative fractions, positive fractions, NaN,
+  both infinities, extreme floats, integer-conversion boundaries, nonnumeric
+  values, empty/missing/non-list keys and valid boundary operations. The new
+  regression test fails against the previous implementation because `-0.5`
+  reads the first element instead of returning the fallback.
 
-The port preserves upstream behavior so that these corrections can be reviewed
-separately from the import. Existing tests cover ordinary persistence and list/
-hash operations; they do not establish correctness for these failure cases.
+After the list-index fix, the focused native tests passed **643 assertions in 12 test
+cases** on Windows. Compilation and linking succeeded; the existing missing-font
+fixture-copy failure still makes the overall build command return failure.
+The POSIX replacement path has not been runtime-tested here.

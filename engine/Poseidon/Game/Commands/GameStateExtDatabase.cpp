@@ -3,6 +3,7 @@
 #include <Poseidon/Foundation/Framework/DebugLog.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -12,6 +13,10 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace Poseidon
 {
@@ -52,9 +57,11 @@ struct DatabaseEntry
 {
     DatabaseValue root = DatabaseValue::MakeHash();
     int refCount = 0;
+    int nextFree = -1;
 };
 
 AutoArray<DatabaseEntry> GDatabaseEntries;
+int GFirstFreeDatabase = -1;
 
 static DatabaseEntry* GetDatabaseEntry(GameValuePar value)
 {
@@ -86,8 +93,17 @@ static RString DatabaseFilename(GameValuePar value)
 
 static GameDatabaseType NewDatabaseHandle()
 {
-    DatabaseEntry entry;
-    const int index = GDatabaseEntries.Add(entry);
+    int index = GFirstFreeDatabase;
+    if (index >= 0)
+    {
+        DatabaseEntry& entry = GDatabaseEntries[index];
+        GFirstFreeDatabase = entry.nextFree;
+        entry.nextFree = -1;
+    }
+    else
+    {
+        index = GDatabaseEntries.Add(DatabaseEntry());
+    }
     GameDatabaseType database;
     database.SetIndex(index);
     return database;
@@ -362,8 +378,13 @@ void ReleaseDatabaseRef(int index)
     if (index < 0 || index >= GDatabaseEntries.Size())
         return;
     DatabaseEntry& entry = GDatabaseEntries[index];
-    if (entry.refCount > 0)
-        --entry.refCount;
+    if (entry.refCount > 0 && --entry.refCount == 0)
+    {
+        // Drop nested values and container capacity before making the slot reusable.
+        entry.root = DatabaseValue::MakeHash();
+        entry.nextFree = GFirstFreeDatabase;
+        GFirstFreeDatabase = index;
+    }
 }
 } // namespace
 
@@ -528,7 +549,9 @@ GameValue DatabaseSave(const GameState* /*state*/, GameValuePar oper1, GameValue
         return false;
 
     Poseidon::CreatePath(filename);
-    const std::string temp = std::string((const char*)filename) + ".tmp";
+    const auto destination = std::filesystem::path((const char*)filename);
+    auto temp = destination;
+    temp += ".tmp";
     std::ofstream output(temp, std::ios::binary | std::ios::trunc);
     const char magic[] = "PDB1";
     const std::uint32_t version = 1;
@@ -544,12 +567,17 @@ GameValue DatabaseSave(const GameState* /*state*/, GameValuePar oper1, GameValue
     }
 
     std::error_code error;
-    std::filesystem::remove(std::filesystem::path((const char*)filename), error);
-    error.clear();
-    std::filesystem::rename(temp, std::filesystem::path((const char*)filename), error);
+#ifdef _WIN32
+    // Windows rename does not replace existing files; keep the old file until replacement succeeds.
+    if (!::MoveFileExW(temp.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING))
+        error = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+#else
+    std::filesystem::rename(temp, destination, error);
+#endif
     if (error)
     {
-        std::filesystem::remove(temp, error);
+        std::error_code ignored;
+        std::filesystem::remove(temp, ignored);
         LOG_ERROR(Core, "[DATABASE] Save failed for '{}' (filesystem error {})", (const char*)filename, error.value());
         return false;
     }
@@ -637,6 +665,18 @@ GameValue DatabaseListPushMany(const GameState* /*state*/, GameValuePar oper1, G
     return (float)list.list.size();
 }
 
+static bool GetListIndex(const DatabaseValue* list, GameValuePar value, size_t& index)
+{
+    if (!list || value.GetType() != GameScalar)
+        return false;
+    const double number = static_cast<float>(value);
+    if (!std::isfinite(number) || number < 0 || std::trunc(number) != number ||
+        number >= static_cast<double>(list->list.size()))
+        return false;
+    index = static_cast<size_t>(number);
+    return true;
+}
+
 GameValue DatabaseListPop(const GameState* state, GameValuePar oper1, GameValuePar oper2)
 {
     DatabaseEntry* database = GetDatabaseEntry(oper1);
@@ -651,10 +691,7 @@ GameValue DatabaseListPop(const GameState* state, GameValuePar oper1, GameValueP
     size_t index = list->list.size() - 1;
     if (arguments.Size() > 1)
     {
-        if (arguments[1].GetType() != GameScalar || (float)arguments[1] < 0)
-            return DefaultValue(arguments, 2);
-        index = static_cast<size_t>((float)arguments[1]);
-        if (index >= list->list.size())
+        if (!GetListIndex(list, arguments[1], index))
             return DefaultValue(arguments, 2);
     }
     DatabaseValue result = std::move(list->list[index]);
@@ -671,9 +708,9 @@ GameValue DatabaseListGet(const GameState* state, GameValuePar oper1, GameValueP
     if (arguments.Size() < 2 || arguments[0].GetType() != GameString || arguments[1].GetType() != GameScalar)
         return DefaultValue(arguments, 2);
     DatabaseValue* list = GetList(database, ToString(arguments[0]));
-    const int index = (int)(float)arguments[1];
-    return list && index >= 0 && index < (int)list->list.size() ? ToGameValue(state, list->list[index])
-                                                               : DefaultValue(arguments, 2);
+    size_t index;
+    return GetListIndex(list, arguments[1], index) ? ToGameValue(state, list->list[index])
+                                                 : DefaultValue(arguments, 2);
 }
 
 GameValue DatabaseListSet(const GameState* /*state*/, GameValuePar oper1, GameValuePar oper2)
@@ -685,9 +722,9 @@ GameValue DatabaseListSet(const GameState* /*state*/, GameValuePar oper1, GameVa
     if (arguments.Size() != 3 || arguments[0].GetType() != GameString || arguments[1].GetType() != GameScalar)
         return false;
     DatabaseValue* list = GetList(database, ToString(arguments[0]));
-    const int index = (int)(float)arguments[1];
+    size_t index;
     DatabaseValue item;
-    if (!list || index < 0 || index >= (int)list->list.size() || !ToDatabaseValue(arguments[2], item))
+    if (!GetListIndex(list, arguments[1], index) || !ToDatabaseValue(arguments[2], item))
         return false;
     list->list[index] = std::move(item);
     return true;
@@ -702,8 +739,8 @@ GameValue DatabaseListRemove(const GameState* /*state*/, GameValuePar oper1, Gam
     if (arguments.Size() != 2 || arguments[0].GetType() != GameString || arguments[1].GetType() != GameScalar)
         return false;
     DatabaseValue* list = GetList(database, ToString(arguments[0]));
-    const int index = (int)(float)arguments[1];
-    if (!list || index < 0 || index >= (int)list->list.size())
+    size_t index;
+    if (!GetListIndex(list, arguments[1], index))
         return false;
     list->list.erase(list->list.begin() + index);
     return true;

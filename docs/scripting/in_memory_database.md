@@ -4,6 +4,12 @@ The game database is an independent, in-memory key-value store exposed to script
 
 Database data is held in memory until explicitly saved. Persistence uses the database's binary `PDB1` format.
 
+Copies of a database handle share its in-memory contents. When the last handle
+is released, those contents and their container allocations are freed; unsaved
+changes are lost. The empty storage slot may be reused by a later `dbNew` or
+`dbLoad`. Live handles keep their own database intact. Slot-table capacity is
+retained for reuse and follows peak simultaneous database usage.
+
 ## Creating and loading databases
 
 ```sqf
@@ -32,6 +38,11 @@ success = _db dbSave "players.db";
 Returns `true` when the database is successfully written and `false` on failure.
 
 Saving writes a temporary file and then replaces the destination. Existing files are overwritten. The file is binary and should not be edited as a text config file.
+
+The previous file is not deleted before replacement. If replacement fails, the
+previous database is retained and `dbSave` returns `false`; temporary-file cleanup
+does not overwrite the reported replacement error. This does not guarantee
+durability across a power loss.
 
 ## General keys and values
 
@@ -63,6 +74,12 @@ keys = _db dbKeys "players.UID123";
 ## Lists
 
 Lists are zero-indexed.
+
+Explicit indices must be finite, nonnegative whole numbers smaller than the
+list size. Fractional values, NaN, infinities and out-of-range values are
+rejected without modifying the list. `dbListGet` and `dbListPop` return the
+fallback for an invalid index; `dbListSet` and `dbListRemove` return `false`.
+Omitting the index from `dbListPop` still removes the last item.
 
 ### Append one or many values
 
